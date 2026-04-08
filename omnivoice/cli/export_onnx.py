@@ -76,24 +76,28 @@ class OmniVoiceOnnxWrapper(nn.Module):
         super().__init__()
         self.model = model
 
-    def _build_llm_attention_mask(self, attention_mask: torch.Tensor) -> dict:
-        """Convert a 2-D padding mask into the additive causal mask Qwen expects."""
-        batch_size, seq_len = attention_mask.shape
+    def _build_llm_attention_mask(self, attention_mask: torch.Tensor) -> torch.Tensor:
+        """Match OmniVoice's non-causal batched inference mask.
+
+        During iterative decoding the PyTorch path uses a 4-D boolean mask where
+        every valid token can attend to every other valid token. Padded query
+        rows keep a self-diagonal ``True`` entry so the underlying LLM does not
+        see a fully masked row. Export must mirror that layout; using a causal
+        mask here severely degrades generation quality.
+        """
+        valid_tokens = attention_mask.ne(0)
+        _, seq_len = valid_tokens.shape
         device = attention_mask.device
-        dtype = self.model.get_input_embeddings().weight.dtype
 
-        causal_mask = torch.ones((seq_len, seq_len), dtype=torch.bool, device=device)
-        causal_mask = torch.triu(causal_mask, diagonal=1).unsqueeze(0).unsqueeze(0)
+        full_attention = valid_tokens[:, None, :, None] & valid_tokens[:, None, None, :]
 
-        padding_mask = attention_mask[:, None, None, :].eq(0)
-        blocked = causal_mask | padding_mask
-
-        additive_mask = torch.zeros(
-            (batch_size, 1, seq_len, seq_len), dtype=dtype, device=device
+        pad_queries = ~valid_tokens[:, None, :, None]
+        positions = torch.arange(seq_len, device=device)
+        pad_diag = positions.view(1, 1, seq_len, 1).eq(
+            positions.view(1, 1, 1, seq_len)
         )
-        additive_mask = additive_mask.masked_fill(blocked, torch.finfo(dtype).min)
 
-        return {"full_attention": additive_mask}
+        return full_attention | (pad_queries & pad_diag)
 
     def forward(
         self,
