@@ -4,6 +4,7 @@ This directory contains scripts and configs for training, fine-tuning, and evalu
 
 | Use Case | Script | Description |
 |---|---|---|
+| ONNX Runtime inference | [onnx_infer.py](onnx_infer.py) | Generate a WAV file from text using `artifacts/onnx/omnivoice.onnx` plus the tokenizer assets |
 | Training from scratch | [run_emilia.sh](run_emilia.sh) | Full pipeline on the Emilia dataset (data check, tokenization, training) |
 | Fine-tuning | [run_finetune.sh](run_finetune.sh) | Fine-tune from a pretrained checkpoint using your own JSONL data |
 | Evaluation | [run_eval.sh](run_eval.sh) | Evaluate WER, speaker similarity, and UTMOS on standard test sets |

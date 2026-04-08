@@ -238,6 +238,25 @@ Notes:
 - The exporter loads the model with `attn_implementation="eager"` to improve ONNX compatibility.
 - Large `float32` checkpoints may require ONNX external data. This is enabled by default via `--external-data`, and the exporter packs weights into a single `*.onnx_data` file.
 
+### ONNX Runtime Example
+
+If you already have an exported graph such as `artifacts/onnx/omnivoice.onnx`, you can generate a WAV file with the example script:
+
+```bash
+pip install onnxruntime
+
+python examples/onnx_infer.py \
+  --onnx artifacts/onnx/omnivoice.onnx \
+  --text "Hello, this is an ONNX Runtime example." \
+  --output out.wav
+```
+
+Notes:
+
+- The ONNX graph still needs the text tokenizer and the Higgs audio tokenizer/decoder. By default, the script loads them from `k2-fsa/OmniVoice` and `eustlb/higgs-audio-v2-tokenizer`.
+- If you prefer local files, pass `--tokenizer /path/to/OmniVoice` and `--audio-tokenizer /path/to/higgs-audio-v2-tokenizer`.
+- The example currently covers text-only generation (auto voice / voice design). Voice cloning can be added with the same decoding pattern.
+
 ### Demo
 
 ```bash
