@@ -43,6 +43,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+onnx = [
+    "onnx>=1.16",
+]
 
 eval = [
     "jiwer==3.1.0",       # WER
@@ -58,6 +61,7 @@ eval = [
 omnivoice-infer = "omnivoice.cli.infer:main"
 omnivoice-infer-batch = "omnivoice.cli.infer_batch:main"
 omnivoice-demo = "omnivoice.cli.demo:main"
+omnivoice-export-onnx = "omnivoice.cli.export_onnx:main"
 
 [project.urls]
 Homepage = "https://github.com/k2-fsa/OmniVoice"

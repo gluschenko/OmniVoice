@@ -216,6 +216,27 @@ Three CLI entry points are provided. The CLI tools support all features availabl
 | `omnivoice-demo` | Interactive Gradio web demo | [omnivoice/cli/demo.py](omnivoice/cli/demo.py) |
 | `omnivoice-infer` | Single-item inference | [omnivoice/cli/infer.py](omnivoice/cli/infer.py) |
 | `omnivoice-infer-batch` | Batch inference across multiple GPUs | [omnivoice/cli/infer_batch.py](omnivoice/cli/infer_batch.py) |
+| `omnivoice-export-onnx` | Export the model forward graph to ONNX | [omnivoice/cli/export_onnx.py](omnivoice/cli/export_onnx.py) |
+
+### ONNX Export
+
+You can export the model's tensor forward pass to ONNX:
+
+```bash
+# Install optional ONNX dependency once
+pip install .[onnx]
+
+# Export local checkpoint or HuggingFace repo
+omnivoice-export-onnx \
+  --model k2-fsa/OmniVoice \
+  --output omnivoice.onnx
+```
+
+Notes:
+
+- This exports the `forward()` graph (`input_ids`, `audio_mask`, `attention_mask`, `position_ids` -> `logits`), not the full Python `generate()` pipeline.
+- The exporter loads the model with `attn_implementation="eager"` to improve ONNX compatibility.
+- Large `float32` checkpoints may require ONNX external data. This is enabled by default via `--external-data`, and the exporter packs weights into a single `*.onnx_data` file.
 
 ### Demo
 
