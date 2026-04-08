@@ -230,6 +230,22 @@ pip install .[onnx]
 omnivoice-export-onnx \
   --model k2-fsa/OmniVoice \
   --output omnivoice.onnx
+
+# Optionally emit additional quantized variants in the same run
+pip install onnxruntime
+
+omnivoice-export-onnx \
+  --model k2-fsa/OmniVoice \
+  --output omnivoice.onnx \
+  --quantize all_dynamic
+
+# Static quantization is also available and uses synthetic calibration samples
+omnivoice-export-onnx \
+  --model k2-fsa/OmniVoice \
+  --output omnivoice.onnx \
+  --quantize static_qdq_u8s8 static_qoperator_s8s8 \
+  --calibration-samples 8 \
+  --calibration-method entropy
 ```
 
 Notes:
@@ -237,6 +253,10 @@ Notes:
 - This exports the `forward()` graph (`input_ids`, `audio_mask`, `attention_mask`, `position_ids` -> `logits`), not the full Python `generate()` pipeline.
 - The exporter loads the model with `attn_implementation="eager"` to improve ONNX compatibility.
 - Large `float32` checkpoints may require ONNX external data. This is enabled by default via `--external-data`, and the exporter packs weights into a single `*.onnx_data` file.
+- `--dtype` controls the floating-point model precision during export, while `--quantize` adds extra post-export ONNX Runtime variants.
+- Dynamic profiles now include `qint8`, `quint8`, per-channel variants, reduced-range variants, and `qint16`/`quint16` variants. Use `--quantize all_dynamic` to emit every dynamic profile in one command.
+- Static profiles include `static_qdq_u8s8`, `static_qdq_s8s8`, `static_qoperator_u8s8`, `static_qoperator_s8s8`, plus per-channel variants. Static quantization uses synthetic calibration inputs derived from the export shapes and is controlled by `--calibration-samples` and `--calibration-method`.
+- Quantized files are written next to the base model, e.g. `omnivoice.qint8.onnx`. Use `--quantize all` to emit every supported dynamic and static profile in one command.
 
 ### ONNX Runtime Example
 

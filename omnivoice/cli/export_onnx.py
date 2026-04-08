@@ -29,10 +29,203 @@ import argparse
 import logging
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 
 from omnivoice.models.omnivoice import OmniVoice
+
+
+INPUT_NAMES = [
+    "input_ids",
+    "audio_mask",
+    "attention_mask",
+    "position_ids",
+]
+
+CALIBRATION_METHODS = {
+    "minmax": "MinMax",
+    "entropy": "Entropy",
+    "percentile": "Percentile",
+    "distribution": "Distribution",
+}
+
+QUANTIZATION_PROFILES = {
+    "qint8": {
+        "kind": "dynamic",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Dynamic int8 weights.",
+    },
+    "quint8": {
+        "kind": "dynamic",
+        "weight_type": "QUInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Dynamic uint8 weights.",
+    },
+    "qint8_per_channel": {
+        "kind": "dynamic",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Dynamic int8 weights with per-channel quantization.",
+    },
+    "quint8_per_channel": {
+        "kind": "dynamic",
+        "weight_type": "QUInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Dynamic uint8 weights with per-channel quantization.",
+    },
+    "qint8_reduce_range": {
+        "kind": "dynamic",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": True,
+        "description": "Dynamic int8 weights with reduced range.",
+    },
+    "quint8_reduce_range": {
+        "kind": "dynamic",
+        "weight_type": "QUInt8",
+        "per_channel": False,
+        "reduce_range": True,
+        "description": "Dynamic uint8 weights with reduced range.",
+    },
+    "qint8_per_channel_reduce_range": {
+        "kind": "dynamic",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": True,
+        "description": "Dynamic int8 weights with per-channel reduced-range quantization.",
+    },
+    "quint8_per_channel_reduce_range": {
+        "kind": "dynamic",
+        "weight_type": "QUInt8",
+        "per_channel": True,
+        "reduce_range": True,
+        "description": "Dynamic uint8 weights with per-channel reduced-range quantization.",
+    },
+    "qint16": {
+        "kind": "dynamic",
+        "weight_type": "QInt16",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Dynamic int16 weights.",
+    },
+    "quint16": {
+        "kind": "dynamic",
+        "weight_type": "QUInt16",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Dynamic uint16 weights.",
+    },
+    "qint16_per_channel": {
+        "kind": "dynamic",
+        "weight_type": "QInt16",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Dynamic int16 weights with per-channel quantization.",
+    },
+    "quint16_per_channel": {
+        "kind": "dynamic",
+        "weight_type": "QUInt16",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Dynamic uint16 weights with per-channel quantization.",
+    },
+    "static_qdq_u8s8": {
+        "kind": "static",
+        "quant_format": "QDQ",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Static QDQ quantization with uint8 activations and int8 weights.",
+    },
+    "static_qdq_s8s8": {
+        "kind": "static",
+        "quant_format": "QDQ",
+        "activation_type": "QInt8",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Static QDQ quantization with int8 activations and int8 weights.",
+    },
+    "static_qoperator_u8s8": {
+        "kind": "static",
+        "quant_format": "QOperator",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Static QOperator quantization with uint8 activations and int8 weights.",
+    },
+    "static_qoperator_s8s8": {
+        "kind": "static",
+        "quant_format": "QOperator",
+        "activation_type": "QInt8",
+        "weight_type": "QInt8",
+        "per_channel": False,
+        "reduce_range": False,
+        "description": "Static QOperator quantization with int8 activations and int8 weights.",
+    },
+    "static_qdq_u8s8_per_channel": {
+        "kind": "static",
+        "quant_format": "QDQ",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Static QDQ quantization with uint8 activations and per-channel int8 weights.",
+    },
+    "static_qdq_s8s8_per_channel": {
+        "kind": "static",
+        "quant_format": "QDQ",
+        "activation_type": "QInt8",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Static QDQ quantization with int8 activations and per-channel int8 weights.",
+    },
+    "static_qoperator_u8s8_per_channel": {
+        "kind": "static",
+        "quant_format": "QOperator",
+        "activation_type": "QUInt8",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Static QOperator quantization with uint8 activations and per-channel int8 weights.",
+    },
+    "static_qoperator_s8s8_per_channel": {
+        "kind": "static",
+        "quant_format": "QOperator",
+        "activation_type": "QInt8",
+        "weight_type": "QInt8",
+        "per_channel": True,
+        "reduce_range": False,
+        "description": "Static QOperator quantization with int8 activations and per-channel int8 weights.",
+    },
+}
+
+DYNAMIC_QUANTIZATION_PROFILES = [
+    name
+    for name, profile in QUANTIZATION_PROFILES.items()
+    if profile["kind"] == "dynamic"
+]
+
+STATIC_QUANTIZATION_PROFILES = [
+    name
+    for name, profile in QUANTIZATION_PROFILES.items()
+    if profile["kind"] == "static"
+]
+
+QUANTIZATION_ALIASES = {
+    "all_dynamic": DYNAMIC_QUANTIZATION_PROFILES,
+    "all_static": STATIC_QUANTIZATION_PROFILES,
+    "all": list(QUANTIZATION_PROFILES),
+}
 
 
 def get_best_device() -> str:
@@ -180,9 +373,161 @@ def maybe_check_onnx_installed() -> None:
         ) from exc
 
 
+def maybe_get_quantization_api():
+    """Load ONNX Runtime quantization APIs lazily."""
+    try:
+        from onnxruntime.quantization import (
+            CalibrationMethod,
+            QuantFormat,
+            QuantType,
+            quantize_dynamic,
+            quantize_static,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "ONNX quantization requires `onnxruntime` (or `onnxruntime-gpu`). "
+            "Install it with `pip install onnxruntime` before using --quantize."
+        ) from exc
+
+    return CalibrationMethod, QuantFormat, QuantType, quantize_dynamic, quantize_static
+
+
+def parse_calibration_method(value: str) -> str:
+    """Parse the static-quantization calibration method."""
+    key = value.strip().lower().replace("-", "_")
+    if key not in CALIBRATION_METHODS:
+        raise ValueError(
+            "Unsupported calibration method: "
+            f"{value}. Available methods: {', '.join(CALIBRATION_METHODS)}."
+        )
+    return CALIBRATION_METHODS[key]
+
+
+def parse_quantization_profiles(values: list[str] | None) -> list[str]:
+    """Parse requested quantization profiles from CLI tokens."""
+    if not values:
+        return []
+
+    profiles: list[str] = []
+    available = ", ".join(
+        [*QUANTIZATION_PROFILES.keys(), *QUANTIZATION_ALIASES.keys()]
+    )
+
+    for value in values:
+        for part in value.split(","):
+            key = part.strip().lower().replace("-", "_")
+            if not key:
+                continue
+
+            if key in QUANTIZATION_ALIASES:
+                for profile_name in QUANTIZATION_ALIASES[key]:
+                    if profile_name not in profiles:
+                        profiles.append(profile_name)
+                continue
+
+            if key not in QUANTIZATION_PROFILES:
+                raise ValueError(
+                    f"Unsupported quantization profile: {part}. "
+                    f"Available profiles: {available}, all."
+                )
+
+            if key not in profiles:
+                profiles.append(key)
+
+    return profiles
+
+
+class SyntheticCalibrationDataReader:
+    """Feed synthetic calibration samples into ONNX Runtime static quantization."""
+
+    def __init__(self, samples: list[dict[str, np.ndarray]]):
+        self.samples = samples
+        self.start_index = 0
+        self.end_index = len(samples)
+        self.index = self.start_index
+
+    def get_next(self) -> dict[str, np.ndarray] | None:
+        if self.index >= self.end_index:
+            return None
+
+        item = self.samples[self.index]
+        self.index += 1
+        return item
+
+    def __len__(self) -> int:
+        return self.end_index - self.start_index
+
+    def set_range(self, start_index: int, end_index: int):
+        self.start_index = max(0, start_index)
+        self.end_index = min(len(self.samples), end_index)
+        self.index = self.start_index
+
+
+def tensor_inputs_to_numpy(
+    dummy_inputs: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+) -> dict[str, np.ndarray]:
+    """Convert traced PyTorch inputs to NumPy for ONNX Runtime."""
+    return {
+        name: tensor.detach().cpu().numpy()
+        for name, tensor in zip(INPUT_NAMES, dummy_inputs, strict=True)
+    }
+
+
+def build_calibration_samples(
+    model: OmniVoice,
+    batch_size: int,
+    seq_len: int,
+    text_prefix_len: int,
+    num_samples: int,
+) -> list[dict[str, np.ndarray]]:
+    """Generate synthetic calibration feeds matching the exported ONNX graph."""
+    if num_samples < 1:
+        raise ValueError("--calibration-samples must be at least 1 for static quantization.")
+
+    samples: list[dict[str, np.ndarray]] = []
+    for _ in range(num_samples):
+        samples.append(
+            tensor_inputs_to_numpy(
+                build_dummy_inputs(
+                    model=model,
+                    batch_size=batch_size,
+                    seq_len=seq_len,
+                    text_prefix_len=text_prefix_len,
+                    device="cpu",
+                )
+            )
+        )
+    return samples
+
+
 def get_external_data_path(output_path: Path) -> Path:
     """Return the consolidated external data filename for an ONNX model."""
     return output_path.with_suffix(output_path.suffix + "_data")
+
+
+def get_quantized_output_path(output_path: Path, profile_name: str) -> Path:
+    """Append the quantization profile to the ONNX filename."""
+    return output_path.with_name(
+        f"{output_path.stem}.{profile_name}{output_path.suffix}"
+    )
+
+
+def collect_external_data_files(output_path: Path) -> set[Path]:
+    """List current external tensor shard files referenced by the model."""
+    import onnx
+    from onnx import external_data_helper
+
+    model = onnx.load(str(output_path), load_external_data=False)
+    external_files: set[Path] = set()
+    for tensor in external_data_helper._get_all_tensors(model):
+        if tensor.data_location != onnx.TensorProto.EXTERNAL:
+            continue
+
+        location = external_data_helper.ExternalDataInfo(tensor).location
+        if location:
+            external_files.add((output_path.parent / location).resolve())
+
+    return external_files
 
 
 def repack_external_data(output_path: Path) -> Path:
@@ -191,20 +536,13 @@ def repack_external_data(output_path: Path) -> Path:
 
     external_data_path = get_external_data_path(output_path)
     temp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    stale_external_files = collect_external_data_files(output_path)
 
-    stale_external_files = [
-        path
-        for path in output_path.parent.iterdir()
-        if path.is_file()
-        and path.name not in {output_path.name, external_data_path.name, temp_output_path.name}
-    ]
-
+    model = onnx.load(str(output_path), load_external_data=True)
     if external_data_path.exists():
         external_data_path.unlink()
     if temp_output_path.exists():
         temp_output_path.unlink()
-
-    model = onnx.load(str(output_path), load_external_data=True)
     onnx.save_model(
         model,
         str(temp_output_path),
@@ -220,7 +558,7 @@ def repack_external_data(output_path: Path) -> Path:
     temp_output_path.replace(output_path)
 
     for stale_file in stale_external_files:
-        if stale_file.exists():
+        if stale_file.exists() and stale_file != external_data_path:
             stale_file.unlink()
 
     return external_data_path
@@ -269,6 +607,54 @@ def export_with_external_data_fallback(
         str(output_path),
         use_external_data_format=external_data,
         **export_kwargs,
+    )
+
+
+def quantize_onnx_model(
+    input_path: Path,
+    output_path: Path,
+    profile_name: str,
+    external_data: bool,
+    calibration_samples: list[dict[str, np.ndarray]] | None = None,
+    calibration_method: str = "MinMax",
+) -> None:
+    """Create one quantized ONNX variant."""
+    (
+        CalibrationMethod,
+        QuantFormat,
+        QuantType,
+        quantize_dynamic,
+        quantize_static,
+    ) = maybe_get_quantization_api()
+    profile = QUANTIZATION_PROFILES[profile_name]
+
+    if profile["kind"] == "dynamic":
+        quantize_dynamic(
+            str(input_path),
+            str(output_path),
+            weight_type=getattr(QuantType, profile["weight_type"]),
+            per_channel=profile["per_channel"],
+            reduce_range=profile["reduce_range"],
+            use_external_data_format=external_data,
+        )
+        return
+
+    if calibration_samples is None:
+        raise RuntimeError(
+            f"Static quantization profile `{profile_name}` requires calibration samples."
+        )
+
+    quantize_static(
+        str(input_path),
+        str(output_path),
+        SyntheticCalibrationDataReader(calibration_samples),
+        quant_format=getattr(QuantFormat, profile["quant_format"]),
+        per_channel=profile["per_channel"],
+        reduce_range=profile["reduce_range"],
+        activation_type=getattr(QuantType, profile["activation_type"]),
+        weight_type=getattr(QuantType, profile["weight_type"]),
+        use_external_data_format=external_data,
+        calibrate_method=getattr(CalibrationMethod, calibration_method),
     )
 
 
@@ -338,6 +724,30 @@ def get_parser() -> argparse.ArgumentParser:
         default=True,
         help="Export dynamic batch/sequence axes.",
     )
+    parser.add_argument(
+        "--quantize",
+        nargs="*",
+        default=None,
+        metavar="PROFILE",
+        help=(
+            "Optional post-export ONNX Runtime quantization profiles to emit in "
+            "addition to the base model. Accepts space- or comma-separated names: "
+            f"{', '.join(QUANTIZATION_PROFILES)}, {', '.join(QUANTIZATION_ALIASES)}."
+        ),
+    )
+    parser.add_argument(
+        "--calibration-samples",
+        type=int,
+        default=8,
+        help="Number of synthetic calibration batches for static quantization profiles.",
+    )
+    parser.add_argument(
+        "--calibration-method",
+        type=str,
+        default="minmax",
+        choices=list(CALIBRATION_METHODS),
+        help="Calibration method for static quantization profiles.",
+    )
     return parser
 
 
@@ -347,6 +757,8 @@ def main():
 
     args = get_parser().parse_args()
     maybe_check_onnx_installed()
+    quantization_profiles = parse_quantization_profiles(args.quantize)
+    calibration_method = parse_calibration_method(args.calibration_method)
 
     device = args.device or get_best_device()
     export_dtype = parse_dtype(args.dtype)
@@ -397,6 +809,25 @@ def main():
             "logits": {0: "batch", 2: "sequence"},
         }
 
+    calibration_samples = None
+    if any(
+        QUANTIZATION_PROFILES[profile_name]["kind"] == "static"
+        for profile_name in quantization_profiles
+    ):
+        logging.info(
+            "Preparing %s synthetic calibration samples for static quantization "
+            "(method=%s) ...",
+            args.calibration_samples,
+            args.calibration_method,
+        )
+        calibration_samples = build_calibration_samples(
+            model=model,
+            batch_size=args.batch_size,
+            seq_len=args.seq_len,
+            text_prefix_len=args.text_prefix_len,
+            num_samples=args.calibration_samples,
+        )
+
     logging.info("Exporting ONNX graph to %s ...", output_path)
     with torch.inference_mode():
         export_with_external_data_fallback(
@@ -416,6 +847,30 @@ def main():
             "The external weights are stored in a single .onnx_data file next "
             "to the main .onnx model."
         )
+
+    for profile_name in quantization_profiles:
+        quantized_output_path = get_quantized_output_path(output_path, profile_name)
+        profile = QUANTIZATION_PROFILES[profile_name]
+        logging.info(
+            "Quantizing %s -> %s (%s)",
+            output_path,
+            quantized_output_path,
+            profile["description"],
+        )
+        quantize_onnx_model(
+            input_path=output_path,
+            output_path=quantized_output_path,
+            profile_name=profile_name,
+            external_data=args.external_data,
+            calibration_samples=calibration_samples,
+            calibration_method=calibration_method,
+        )
+        if args.external_data:
+            quantized_external_data_path = repack_external_data(quantized_output_path)
+            logging.info(
+                "Packed quantized external weights into: %s",
+                quantized_external_data_path,
+            )
 
 
 if __name__ == "__main__":
